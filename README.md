@@ -29,3 +29,64 @@ l'application : utilisez un compte standard, sans droits administrateur, et
 conservez la base dans un emplacement accessible uniquement à ce compte.
 Les rôles et restrictions d'accès aux données du CRM seront implémentés dans
 les étapes de développement.
+
+## Étape 2 : modèles et tables
+
+Après avoir configuré `.env`, créez les tables avec :
+
+```powershell
+.\.venv\Scripts\python.exe init_db.py
+```
+
+La commande peut être relancée : elle conserve les tables déjà présentes.
+
+```mermaid
+erDiagram
+    COLLABORATORS ||--o{ CLIENTS : "commercial responsable"
+    CLIENTS ||--o{ CONTRACTS : "possède"
+    CONTRACTS ||--o{ EVENTS : "concerne"
+    COLLABORATORS o|--o{ EVENTS : "support attribué"
+
+    COLLABORATORS {
+        int id PK
+        string full_name
+        string email
+        string password_hash
+        string role
+    }
+    CLIENTS {
+        int id PK
+        int sales_contact_id FK
+        string full_name
+        string email
+        string phone
+        string company_name
+        date created_at
+        date updated_at
+    }
+    CONTRACTS {
+        int id PK
+        int client_id FK
+        decimal total_amount
+        decimal amount_due
+        date created_at
+        boolean is_signed
+    }
+    EVENTS {
+        int id PK
+        int contract_id FK
+        int support_contact_id FK
+        string name
+        datetime start_at
+        datetime end_at
+        string location
+        int attendee_count
+        text notes
+    }
+```
+
+Le commercial d'un contrat est celui de son client. Les coordonnées du client
+d'un événement sont accessibles par son contrat. Un événement peut attendre
+l'attribution d'un support. Les règles propres aux rôles et la condition
+« contrat signé avant création d'un événement » seront contrôlées dans
+l'application lors des étapes de développement.
