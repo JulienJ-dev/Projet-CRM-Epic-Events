@@ -90,3 +90,18 @@ d'un événement sont accessibles par son contrat. Un événement peut attendre
 l'attribution d'un support. Les règles propres aux rôles et la condition
 « contrat signé avant création d'un événement » seront contrôlées dans
 l'application lors des étapes de développement.
+
+## Vérifications pendant le développement
+
+Installez les outils de développement, puis lancez les contrôles :
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m black --check database.py models.py init_db.py tests
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Les tests utilisent une base SQLite temporaire en mémoire : ils ne modifient
+pas `epic_events.db`. La commande `pytest` affiche aussi la couverture des
+modules de connexion et de modèles. Ces contrôles seront à compléter au fur et
+à mesure que l'application grandira.

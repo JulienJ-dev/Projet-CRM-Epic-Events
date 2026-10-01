@@ -1,0 +1,6 @@
+[tool.black]
+target-version = ["py39"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --cov=database --cov=models --cov-report=term-missing"
