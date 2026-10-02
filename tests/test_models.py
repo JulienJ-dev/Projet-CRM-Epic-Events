@@ -6,19 +6,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
-from database import create_db_engine
-from models import Base, Client, Collaborator, Contract, Event
-
-
-@pytest.fixture
-def session():
-    test_engine = create_db_engine("sqlite:///:memory:")
-    Base.metadata.create_all(test_engine)
-    with Session(test_engine) as db_session:
-        yield db_session
-    test_engine.dispose()
+from models import Client, Collaborator, Contract, Event, Role
 
 
 def create_client(session):
@@ -26,7 +14,7 @@ def create_client(session):
         full_name="Commercial test",
         email="commercial@example.test",
         password_hash="test",
-        role="commercial",
+        role=session.scalar(select(Role).where(Role.name == "commercial")),
     )
     client = Client(
         full_name="Client test",
@@ -46,7 +34,7 @@ def test_relations_between_client_contract_and_event(session):
         full_name="Support test",
         email="support@example.test",
         password_hash="test",
-        role="support",
+        role=session.scalar(select(Role).where(Role.name == "support")),
     )
     contract = Contract(
         client=client,
@@ -68,8 +56,8 @@ def test_relations_between_client_contract_and_event(session):
     session.expire_all()
 
     saved_event = session.scalars(select(Event)).one()
-    assert saved_event.contract.client.sales_contact.role == "commercial"
-    assert saved_event.support_contact.role == "support"
+    assert saved_event.contract.client.sales_contact.role.name == "commercial"
+    assert saved_event.support_contact.role.name == "support"
     assert saved_event.contract.amount_due == Decimal("25.00")
 
 

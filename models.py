@@ -20,21 +20,27 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 
+class Role(Base):
+    """Département auquel appartient un collaborateur."""
+
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(20), unique=True, nullable=False)
+
+    collaborators = relationship("Collaborator", back_populates="role")
+
+
 class Collaborator(Base):
     __tablename__ = "collaborators"
-    __table_args__ = (
-        CheckConstraint(
-            "role IN ('gestion', 'commercial', 'support')",
-            name="valid_collaborator_role",
-        ),
-    )
 
     id = Column(Integer, primary_key=True)
     full_name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    role = Column(String(20), nullable=False)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
 
+    role = relationship("Role", back_populates="collaborators")
     clients = relationship("Client", back_populates="sales_contact")
     events = relationship("Event", back_populates="support_contact")
 
