@@ -144,6 +144,53 @@ L'autorisation vérifie ensuite le département et les données concernées avec
 | Attribuer un support à un événement | Oui | Non | Non |
 | Modifier un événement | Non | Non | Ses événements attribués |
 
+## Étape 4 : session persistante
+
+Le secret JWT est lu dans `.env` avec la variable `JWT_SECRET_KEY`. Une clé
+aléatoire a déjà été générée pour l'environnement local. Sur une nouvelle
+installation, générez-la une seule fois, après avoir copié `.env.example` :
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -c "import secrets; from dotenv import set_key; set_key('.env', 'JWT_SECRET_KEY', secrets.token_urlsafe(32))"
+```
+
+La commande enregistre directement la clé sans l'afficher. Ne versionnez pas
+`.env` et gardez cette clé privée. Changer la clé invalide les jetons existants.
+
+Connectez-vous avec le compte créé à l'étape 3 :
+
+```powershell
+.\.venv\Scripts\python.exe epicevents.py login
+.\.venv\Scripts\python.exe epicevents.py whoami
+.\.venv\Scripts\python.exe epicevents.py logout
+```
+
+`login` demande l'email et le mot de passe avec une saisie masquée. Le jeton
+signé en HS256 est enregistré dans `.session_token`, ignoré par Git. La variable
+optionnelle `SESSION_TOKEN_FILE` permet de choisir un autre emplacement ; un
+chemin relatif est résolu depuis le dossier du projet.
+
+Le jeton expire après huit heures. Une session expirée, altérée ou liée à un
+compte supprimé est refusée et son fichier est supprimé : il faut refaire
+`login`. Un changement de mot de passe invalide aussi les anciens jetons.
+Un échec de connexion ne remplace pas une session locale encore valide.
+
+Le JWT est signé, mais pas chiffré. Il ne contient ni mot de passe, ni hash
+Argon2, ni rôle ; il contient le numéro d'employé, les dates, l'émetteur,
+le destinataire et une empreinte liée aux identifiants du compte. Les fichiers
+temporaires sont créés avec les droits du compte courant (privés sur les
+systèmes POSIX). Sous Windows, l'accès dépend des permissions du dossier :
+conservez le jeton et `.env` dans votre espace personnel.
+
+`get_current_user(session)` vérifie le jeton et recharge le compte avec son
+département actuel depuis la base. `authorize_current_user(session, action,
+resource=None)` fait ensuite appliquer les permissions définies à l'étape 3.
+Les opérations CRUD utiliseront cette fonction avant toute modification.
+
+`logout` supprime le jeton local. Une copie du jeton reste valide jusqu'à son
+expiration, sauf changement du secret, du mot de passe ou suppression du compte.
+
 ## Vérifications pendant le développement
 
 Installez les outils de développement, puis lancez les contrôles :
@@ -156,5 +203,5 @@ Installez les outils de développement, puis lancez les contrôles :
 
 Les tests utilisent une base SQLite temporaire en mémoire : ils ne modifient
 pas `epic_events.db`. La commande `pytest` affiche aussi la couverture des
-modules de connexion, de modèles, de comptes et de permissions. Ces contrôles seront à compléter au fur et
-à mesure que l'application grandira.
+modules de connexion, de modèles, de comptes, de permissions et de session.
+Ces contrôles seront à compléter au fur et à mesure que l'application grandira.

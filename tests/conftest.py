@@ -1,10 +1,13 @@
 """Bases et comptes de test isolés de la base locale."""
 
+import secrets
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import create_db_engine
+from accounts import create_first_manager
 from init_db import initialize_database
 from models import Client, Collaborator, Role
 
@@ -52,3 +55,20 @@ def client(session, users):
     session.add(client)
     session.flush()
     return client
+
+
+@pytest.fixture
+def auth_config(monkeypatch, tmp_path):
+    token_file = tmp_path / ".session_token"
+    monkeypatch.setenv("JWT_SECRET_KEY", secrets.token_urlsafe(48))
+    monkeypatch.setenv("SESSION_TOKEN_FILE", str(token_file))
+    return token_file
+
+
+@pytest.fixture
+def manager(session):
+    manager = create_first_manager(
+        session, "Dawn", "dawn@example.test", "Mot de passe de test 2026"
+    )
+    session.commit()
+    return manager

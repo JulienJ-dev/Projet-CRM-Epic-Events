@@ -3,4 +3,4 @@ target-version = ["py39"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=database --cov=models --cov=security --cov=accounts --cov=permissions --cov=init_db --cov=create_first_manager --cov-report=term-missing"
+addopts = "-q --cov=database --cov=models --cov=security --cov=accounts --cov=permissions --cov=init_db --cov=create_first_manager --cov=authentication --cov=epicevents --cov-report=term-missing"
