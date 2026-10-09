@@ -191,6 +191,41 @@ Les opérations CRUD utiliseront cette fonction avant toute modification.
 `logout` supprime le jeton local. Une copie du jeton reste valide jusqu'à son
 expiration, sauf changement du secret, du mot de passe ou suppression du compte.
 
+## Étape 5 : lecture des données
+
+Le module `read_data.py` fournit trois fonctions : `get_all_clients(session)`,
+`get_all_contracts(session)` et `get_all_events(session)`. Elles vérifient le
+jeton local et les permissions actuelles avant d'interroger les tables métier.
+Les trois départements peuvent lire tous les enregistrements, y compris ceux
+affectés à d'autres collaborateurs. Une table vide donne une liste vide.
+
+Chaque fonction renvoie une liste d'objets SQLAlchemy triée par identifiant.
+Les contacts commerciaux, les clients des contrats et les contrats des
+événements sont chargés avec les données, ainsi que le support éventuel.
+Les relations existantes sont réutilisées : `client.sales_contact`,
+`contract.client.sales_contact` et `event.support_contact`.
+
+Après une connexion avec `epicevents.py login`, utilisation depuis Python :
+
+```python
+from sqlalchemy.orm import Session
+
+from database import engine
+from read_data import get_all_clients, get_all_contracts, get_all_events
+
+with Session(engine) as session:
+    clients = get_all_clients(session)
+    contracts = get_all_contracts(session)
+    events = get_all_events(session)
+    for client in clients:
+        print(client.full_name, client.sales_contact.full_name)
+```
+
+Une session absente, expirée ou invalide déclenche `AuthenticationError`.
+Une permission refusée déclenche `PermissionError`. Les fonctions ne valident
+pas de transaction ; l'appelant gère la session SQLAlchemy. Les commandes
+d'affichage seront ajoutées lors de l'étape consacrée à l'interface.
+
 ## Vérifications pendant le développement
 
 Installez les outils de développement, puis lancez les contrôles :
@@ -201,7 +236,8 @@ Installez les outils de développement, puis lancez les contrôles :
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-Les tests utilisent une base SQLite temporaire en mémoire : ils ne modifient
-pas `epic_events.db`. La commande `pytest` affiche aussi la couverture des
-modules de connexion, de modèles, de comptes, de permissions et de session.
+Les tests utilisent des bases SQLite en mémoire ou dans des fichiers
+temporaires : ils ne modifient pas `epic_events.db`. La commande `pytest`
+affiche aussi la couverture des modules de connexion, de modèles, de comptes,
+de permissions, de session et de lecture.
 Ces contrôles seront à compléter au fur et à mesure que l'application grandira.
