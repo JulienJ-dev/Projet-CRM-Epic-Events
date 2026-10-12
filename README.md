@@ -226,6 +226,75 @@ Une permission refusée déclenche `PermissionError`. Les fonctions ne valident
 pas de transaction ; l'appelant gère la session SQLAlchemy. Les commandes
 d'affichage seront ajoutées lors de l'étape consacrée à l'interface.
 
+## Étape 6 : création et modification
+
+Les fonctions publiques de `write_data.py` identifient l'utilisateur avec son
+jeton et vérifient ses permissions actuelles avant de modifier les objets.
+Elles ne prennent pas de compte utilisateur fourni par l'appelant.
+
+| Fonctions | Utilisateurs autorisés |
+| --- | --- |
+| `create_collaborator`, `update_collaborator` | Gestion |
+| `create_client` | Commercial, avec affectation automatique du client |
+| `update_client` | Commercial responsable du client |
+| `create_contract` | Gestion |
+| `update_contract` | Gestion ou commercial responsable du client |
+| `create_event` | Commercial du client, pour un contrat signé |
+| `update_event` | Support affecté à l'événement, pour ses informations métier |
+| `assign_support` | Gestion, pour affecter, remplacer ou retirer le support |
+
+Les modifications utilisent des arguments nommés, par exemple
+`update_collaborator(session, employee_id, role_name="support")`.
+Le nom, l'email, le mot de passe et le département d'un collaborateur sont
+modifiables. Les associations existantes aux clients et événements sont
+conservées lors d'un changement de département, mais les permissions suivent
+immédiatement le nouveau rôle. La gestion peut réaffecter les événements.
+Un nouveau mot de passe est haché avec Argon2 et invalide les anciens jetons.
+
+Tous les champs métier des contrats sont modifiables, y compris `client_id`,
+`created_at` et `is_signed`. Un commercial ne peut déplacer un contrat qu'entre
+ses propres clients. Le contact commercial reste celui du client associé.
+
+Tous les champs métier des événements sont modifiables selon les permissions.
+Un support peut changer le contrat de son événement vers un contrat signé,
+mais seul un membre de la gestion peut modifier `support_contact_id`.
+`assign_support(session, event_id, None)` retire l'affectation. Un événement
+est créé sans support ; la gestion l'affecte ensuite. Les identifiants des
+enregistrements sont générés par la base et ne sont pas modifiables.
+
+`validation.py` vérifie les types, les textes obligatoires et leurs longueurs,
+le format des emails, les dates, les montants et les nombres de participants.
+Les montants acceptent notamment des chaînes ou des `Decimal`, avec au plus
+deux décimales et un restant à payer compris entre zéro et le total.
+Les dates de création et de contact sont des objets `date` ; les dates
+d'événement sont des objets `datetime` sans fuseau, avec une fin après le début.
+Les relations doivent viser des enregistrements existants et une affectation
+support doit viser un collaborateur du département support. Les champs
+inconnus ou protégés, comme `id` et `password_hash`, sont refusés.
+
+Les fonctions valident les nouvelles valeurs avant de les appliquer, puis
+appellent `flush()` et renvoient l'objet. L'appelant reste responsable de la
+transaction : un bloc `session.begin()` valide les changements en cas de succès
+et les annule en cas d'erreur. Exemple pour un compte de gestion connecté,
+avec un identifiant de client à adapter à la base :
+
+```python
+from sqlalchemy.orm import Session
+
+from database import engine
+from write_data import create_contract, update_contract
+
+with Session(engine) as session, session.begin():
+    contract = create_contract(
+        session, client_id=1, total_amount="1000.00", amount_due="1000.00"
+    )
+    update_contract(session, contract.id, is_signed=True, amount_due="500.00")
+```
+
+Une erreur de validation déclenche `ValueError`, un accès interdit
+`PermissionError`, et une session absente ou invalide `AuthenticationError`.
+Les commandes métier seront ajoutées lors de l'étape consacrée à l'interface.
+
 ## Vérifications pendant le développement
 
 Installez les outils de développement, puis lancez les contrôles :
@@ -239,5 +308,5 @@ Installez les outils de développement, puis lancez les contrôles :
 Les tests utilisent des bases SQLite en mémoire ou dans des fichiers
 temporaires : ils ne modifient pas `epic_events.db`. La commande `pytest`
 affiche aussi la couverture des modules de connexion, de modèles, de comptes,
-de permissions, de session et de lecture.
+de permissions, de session, de lecture, de validation et d'écriture.
 Ces contrôles seront à compléter au fur et à mesure que l'application grandira.
