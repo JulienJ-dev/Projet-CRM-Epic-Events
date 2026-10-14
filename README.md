@@ -94,7 +94,7 @@ Le commercial d'un contrat est celui de son client. Les coordonnées du client
 d'un événement sont accessibles par son contrat. Un événement peut attendre
 l'attribution d'un support. Les règles propres aux rôles et la condition
 « contrat signé avant création d'un événement » sont définies dans
-`permissions.py`. Les opérations CRUD devront appeler ces contrôles.
+`permissions.py`. Les opérations de lecture et d'écriture appellent ces contrôles.
 
 ## Étape 3 : comptes et permissions
 
@@ -186,7 +186,7 @@ conservez le jeton et `.env` dans votre espace personnel.
 `get_current_user(session)` vérifie le jeton et recharge le compte avec son
 département actuel depuis la base. `authorize_current_user(session, action,
 resource=None)` fait ensuite appliquer les permissions définies à l'étape 3.
-Les opérations CRUD utiliseront cette fonction avant toute modification.
+Les opérations d'écriture utilisent cette fonction avant toute modification.
 
 `logout` supprime le jeton local. Une copie du jeton reste valide jusqu'à son
 expiration, sauf changement du secret, du mot de passe ou suppression du compte.
@@ -224,7 +224,7 @@ with Session(engine) as session:
 Une session absente, expirée ou invalide déclenche `AuthenticationError`.
 Une permission refusée déclenche `PermissionError`. Les fonctions ne valident
 pas de transaction ; l'appelant gère la session SQLAlchemy. Les commandes
-d'affichage seront ajoutées lors de l'étape consacrée à l'interface.
+d'affichage sont présentées à l'étape 7 ci-dessous.
 
 ## Étape 6 : création et modification
 
@@ -293,7 +293,143 @@ with Session(engine) as session, session.begin():
 
 Une erreur de validation déclenche `ValueError`, un accès interdit
 `PermissionError`, et une session absente ou invalide `AuthenticationError`.
-Les commandes métier seront ajoutées lors de l'étape consacrée à l'interface.
+Les commandes métier correspondantes sont décrites à l'étape 7 ci-dessous.
+
+## Étape 7 : interface en ligne de commande
+
+Installez les dépendances mises à jour, puis affichez l'aide :
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$python = '.\.venv\Scripts\python.exe'
+& $python epicevents.py --help
+& $python epicevents.py events create --help
+```
+
+Chaque groupe et chaque action possède une aide `--help`, accessible sans
+connexion. Les commandes `login`, `whoami` et `logout` restent disponibles.
+Toutes les commandes métier exigent une session valide et les permissions
+du compte actuellement connecté.
+
+| Groupe | Actions |
+| --- | --- |
+| `clients` | `list`, `show ID`, `create`, `update ID` |
+| `contracts` | `list`, `show ID`, `create`, `update ID` |
+| `events` | `list`, `show ID`, `create`, `update ID`, `assign ID` |
+| `collaborators` | `list`, `show ID`, `create`, `update ID`, `delete ID` (gestion) |
+
+Les listes sont affichées en tableaux avec Rich. `show ID` affiche les détails,
+y compris les contacts et les relations. Les mots de passe, leurs empreintes
+et les jetons ne sont pas affichés. Les balises présentes dans les données
+sont affichées littéralement, et les caractères de contrôle du terminal sont
+retirés avant affichage.
+
+### Consulter et filtrer
+
+```powershell
+& $python epicevents.py clients list
+& $python epicevents.py clients show 1
+& $python epicevents.py contracts list --unsigned
+& $python epicevents.py contracts list --unpaid
+& $python epicevents.py contracts list --unsigned --unpaid
+& $python epicevents.py events list --unassigned
+& $python epicevents.py events list --mine
+```
+
+Les filtres de contrats peuvent être combinés : les résultats doivent alors
+respecter les deux conditions. `--unpaid` signifie qu'un montant reste à payer,
+même si une partie a déjà été payée. `--mine` est réservé au support et montre
+ses événements affectés ; il ne peut pas être combiné avec `--unassigned`.
+Sans filtre, les trois départements peuvent consulter toutes les données métier.
+
+### Gérer les collaborateurs
+
+Depuis un compte de gestion :
+
+```powershell
+& $python epicevents.py collaborators create --name "Bill" --email "bill@example.test" --department commercial
+& $python epicevents.py collaborators create --name "Kate" --email "kate@example.test" --department support
+& $python epicevents.py collaborators list
+& $python epicevents.py collaborators show 2
+& $python epicevents.py collaborators update 2 --name "Bill Boquet" --email "bill.boquet@example.test"
+& $python epicevents.py collaborators update 2 --department support
+& $python epicevents.py collaborators update 2 --change-password
+```
+
+À la création et avec `--change-password`, le mot de passe est demandé deux
+fois avec une saisie masquée. Il n'est pas accepté comme argument du terminal.
+Les départements acceptés sont `gestion`, `commercial` et `support`.
+
+### Créer et modifier les données métier
+
+Les identifiants ci-dessous sont des exemples : utilisez ceux affichés par
+les listes et les messages de création. Changez de compte avec `login` entre
+les opérations selon les départements indiqués.
+
+```powershell
+# Commercial : créer et modifier son client.
+& $python epicevents.py clients create --name "Kevin Casey" --email "kevin@example.test" --phone "+33123456789" --company "Startup"
+& $python epicevents.py clients update 1 --phone "+33987654321"
+
+# Gestion : créer un contrat pour ce client.
+& $python epicevents.py contracts create --client-id 1 --total "1000.00" --due "1000.00"
+
+# Gestion ou commercial du client : signer et mettre à jour le contrat.
+& $python epicevents.py contracts update 1 --signed --due "500.00"
+
+# Commercial du client : créer l'événement pour le contrat signé.
+& $python epicevents.py events create --contract-id 1 --name "Fête épique" --start "2026-11-01 14:00" --end "2026-11-01 18:00" --location "Paris" --attendees 50 --notes "Organisation à préparer"
+
+# Gestion : affecter un support, ou retirer l'affectation.
+& $python epicevents.py events assign 1 --support-id 3
+& $python epicevents.py events assign 1 --clear
+
+# Support affecté : modifier l'événement après son affectation.
+& $python epicevents.py events update 1 --location "Lyon" --notes "Organisation confirmée"
+& $python epicevents.py events update 1 --clear-notes
+```
+
+L'affectation doit être conservée ou rétablie pour qu'un support puisse modifier
+l'événement. `contracts update ID --unsigned` permet de modifier le statut dans
+l'autre sens. Les dates sont saisies au format `AAAA-MM-JJ`, et les dates et
+heures d'événement au format `"AAAA-MM-JJ HH:MM"`.
+
+| Mise à jour | Options disponibles |
+| --- | --- |
+| Collaborateur | `--name`, `--email`, `--department`, `--change-password` |
+| Client | `--name`, `--email`, `--phone`, `--company`, `--created-at`, `--updated-at` |
+| Contrat | `--client-id`, `--total`, `--due`, `--created-at`, `--signed` ou `--unsigned` |
+| Événement | `--contract-id`, `--name`, `--start`, `--end`, `--location`, `--attendees`, `--notes` ou `--clear-notes` |
+
+Seuls les champs fournis sont modifiés, sous réserve des règles métier et des
+permissions. L'affectation du support se fait avec `events assign`.
+
+### Supprimer un collaborateur
+
+```powershell
+& $python epicevents.py collaborators delete 3
+& $python epicevents.py collaborators delete 2 --replacement-commercial 4
+```
+
+Cette action est réservée à la gestion et demande de saisir exactement `OUI`
+pour confirmer. Les clients sont conservés : si le compte en possède, un autre
+commercial doit être indiqué pour les reprendre. Les événements sont conservés
+et deviennent sans support lorsqu'ils étaient affectés au compte supprimé.
+Une validation refusée annule l'opération entière.
+
+### Organisation et erreurs
+
+`cli_parser.py` décrit les commandes et convertit les arguments. `cli_commands.py`
+appelle les services des étapes précédentes. `views.py` gère uniquement
+l'affichage ; les requêtes et règles métier restent dans `read_data.py` et
+`write_data.py`. `epicevents.py` ouvre la transaction et traite les erreurs.
+Un message de réussite d'écriture apparaît après la validation de la transaction.
+
+Les identifiants, montants, dates et nombres de participants sont vérifiés dès
+la conversion des arguments ; les services valident aussi les données et les
+permissions avant écriture. Les codes de sortie sont `0` pour une réussite ou
+une annulation de suppression, `1` pour une erreur métier ou de session, et `2`
+pour des arguments incorrects. Une session expirée nécessite un nouveau `login`.
 
 ## Vérifications pendant le développement
 
@@ -308,5 +444,5 @@ Installez les outils de développement, puis lancez les contrôles :
 Les tests utilisent des bases SQLite en mémoire ou dans des fichiers
 temporaires : ils ne modifient pas `epic_events.db`. La commande `pytest`
 affiche aussi la couverture des modules de connexion, de modèles, de comptes,
-de permissions, de session, de lecture, de validation et d'écriture.
+de permissions, de session, de lecture, de validation, d'écriture et d'interface.
 Ces contrôles seront à compléter au fur et à mesure que l'application grandira.

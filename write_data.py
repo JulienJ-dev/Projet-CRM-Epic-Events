@@ -6,6 +6,7 @@ L'appelant valide ou annule la transaction avec sa session SQLAlchemy.
 
 from datetime import date
 
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 import accounts
@@ -78,6 +79,37 @@ def update_collaborator(session, employee_id, **changes):
     with session.no_autoflush:
         actor = authorize_current_user(session, "update_collaborator")
         return accounts._update_collaborator(session, actor, employee_id, **changes)
+
+
+def delete_collaborator(session, employee_id, replacement_sales_contact_id=None):
+    """Supprime un compte en conservant ses clients et événements."""
+    with session.no_autoflush:
+        authorize_current_user(session, "delete_collaborator")
+        user = _get_record(session, Collaborator, employee_id)
+        clients = session.scalars(
+            select(Client).where(Client.sales_contact_id == user.id)
+        ).all()
+        replacement = None
+        if replacement_sales_contact_id is not None:
+            replacement = _get_record(
+                session, Collaborator, replacement_sales_contact_id
+            )
+            if replacement.id == user.id or replacement.role.name != "commercial":
+                raise ValueError(
+                    "Choisissez un autre collaborateur du département commercial."
+                )
+        if clients and replacement is None:
+            raise ValueError("Indiquez un commercial de remplacement pour ses clients.")
+        events = session.scalars(
+            select(Event).where(Event.support_contact_id == user.id)
+        ).all()
+    for client in clients:
+        client.sales_contact = replacement
+    for current_event in events:
+        current_event.support_contact = None
+    session.delete(user)
+    session.flush()
+    return employee_id
 
 
 def _client_values(values):

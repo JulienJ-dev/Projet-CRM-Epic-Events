@@ -5,6 +5,7 @@ from models import Client, Contract, Event
 
 READ_ACTIONS = {"read_client", "read_contract", "read_event"}
 MANAGEMENT_ACTIONS = {
+    "read_collaborator",
     "create_collaborator",
     "update_collaborator",
     "delete_collaborator",
